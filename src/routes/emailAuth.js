@@ -1,247 +1,219 @@
 // src/routes/emailAuth.js
 import express from 'express'
-import { 
-  analyzeDMARC, 
-  analyzeSPF, 
-  analyzeDKIM, 
-  analyzeMX, 
-  analyzeEmailSecurity 
-} from '../services/emailAuth.js'
-import { verifyCaptcha } from '../utils/captcha.js'
+import { analyzeDMARC } from '../services/dmarcService.js'
+import { analyzeSPF } from '../services/spfService.js'
+import { analyzeDKIM } from '../services/dkimService.js'
+import { analyzeMX } from '../services/mxService.js'
+import { analyzeEmailSecurity } from '../services/emailSecurityService.js'
 import { rateLimitMiddleware } from '../utils/rateLimit.js'
 
 const router = express.Router()
 
-// Bluefox.email captcha verification
-async function verifyBluefoxCaptcha(captchaText, captchaProbe) {
-  try {
-    // For now, we'll accept any non-empty captcha text as valid
-    // In production, you would implement the actual verification logic
-    // that matches your Bluefox.email captcha system
-    if (!captchaText || !captchaProbe) {
-      return false
-    }
-    
-    // Basic validation - captcha text should be at least 3 characters
-    if (captchaText.trim().length < 3) {
-      return false
-    }
-    
-    // TODO: Implement actual Bluefox captcha verification
-    // For now, return true for non-empty inputs
-    console.log('Captcha verification - Text:', captchaText, 'Probe:', captchaProbe?.substring(0, 20) + '...')
-    return true
-  } catch (error) {
-    console.error('Captcha verification error:', error)
-    return false
-  }
-}
-
-// Apply rate limiting to all email auth routes
+// Apply rate limiting to all routes
 router.use(rateLimitMiddleware)
 
-// DMARC Checker Route
+// DMARC Analysis Endpoint
 router.post('/analyze-dmarc', async (req, res) => {
-  const { domain, captchaToken, captchaUserInput } = req.body
+  try {
+    const { domain } = req.body
 
-  if (!domain) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Domain is required' 
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      })
+    }
+
+    // Clean and validate domain
+    const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+    
+    if (!cleanDomain || cleanDomain.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Please enter a valid domain name' 
+      })
+    }
+
+    const result = await analyzeDMARC(cleanDomain)
+    res.json(result)
+
+  } catch (error) {
+    console.error('DMARC analysis error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze DMARC record'
     })
   }
-
-  // Verify captcha
-  const captchaValid = verifyCaptcha(captchaToken, captchaUserInput)
-  if (!captchaValid) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Invalid captcha. Please try again.' 
-    })
-  }
-
-  // Clean and validate domain
-  const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
-  
-  if (!cleanDomain || cleanDomain.length === 0) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Please enter a valid domain name' 
-    })
-  }
-
-  const result = await analyzeDMARC(cleanDomain)
-  return res.json(result)
 })
 
-// SPF Checker Route
+// SPF Analysis Endpoint
 router.post('/analyze-spf', async (req, res) => {
-  const { domain, captchaText, captchaProbe } = req.body
+  try {
+    const { domain } = req.body
 
-  if (!domain) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Domain is required' 
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      })
+    }
+
+    // Clean and validate domain
+    const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+    
+    if (!cleanDomain || cleanDomain.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Please enter a valid domain name' 
+      })
+    }
+
+    const result = await analyzeSPF(cleanDomain)
+    res.json(result)
+
+  } catch (error) {
+    console.error('SPF analysis error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze SPF record'
     })
   }
-
-  // Verify captcha with Bluefox.email format
-  const captchaValid = await verifyBluefoxCaptcha(captchaText, captchaProbe)
-  if (!captchaValid) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Invalid captcha. Please try again.' 
-    })
-  }
-
-  // Clean and validate domain
-  const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
-  
-  if (!cleanDomain || cleanDomain.length === 0) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Please enter a valid domain name' 
-    })
-  }
-
-  const result = await analyzeSPF(cleanDomain)
-  return res.json(result)
 })
 
-// DKIM Checker Route
+// DKIM Analysis Endpoint
 router.post('/analyze-dkim', async (req, res) => {
-  const { domain, selector = 'default', captchaText, captchaProbe } = req.body
+  try {
+    const { domain, selector = 'default' } = req.body
 
-  if (!domain) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Domain is required' 
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      })
+    }
+
+    // Clean and validate domain
+    const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+    
+    if (!cleanDomain || cleanDomain.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Please enter a valid domain name' 
+      })
+    }
+
+    const result = await analyzeDKIM(cleanDomain, selector)
+    res.json(result)
+
+  } catch (error) {
+    console.error('DKIM analysis error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze DKIM record'
     })
   }
-
-  // Verify captcha with Bluefox.email format
-  const captchaValid = await verifyBluefoxCaptcha(captchaText, captchaProbe)
-  if (!captchaValid) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Invalid captcha. Please try again.' 
-    })
-  }
-
-  // Clean and validate domain
-  const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
-  
-  if (!cleanDomain || cleanDomain.length === 0) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Please enter a valid domain name' 
-    })
-  }
-
-  const result = await analyzeDKIM(cleanDomain, selector)
-  return res.json(result)
 })
 
-// MX Checker Route
+// MX Analysis Endpoint
 router.post('/analyze-mx', async (req, res) => {
-  const { domain, captchaText, captchaProbe } = req.body
+  try {
+    const { domain } = req.body
 
-  if (!domain) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Domain is required' 
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      })
+    }
+
+    // Clean and validate domain
+    const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+    
+    if (!cleanDomain || cleanDomain.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Please enter a valid domain name' 
+      })
+    }
+
+    const result = await analyzeMX(cleanDomain)
+    res.json(result)
+
+  } catch (error) {
+    console.error('MX analysis error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze MX records'
     })
   }
-
-  // Verify captcha with Bluefox.email format
-  const captchaValid = await verifyBluefoxCaptcha(captchaText, captchaProbe)
-  if (!captchaValid) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Invalid captcha. Please try again.' 
-    })
-  }
-
-  // Clean and validate domain
-  const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
-  
-  if (!cleanDomain || cleanDomain.length === 0) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Please enter a valid domain name' 
-    })
-  }
-
-  const result = await analyzeMX(cleanDomain)
-  return res.json(result)
 })
 
-// Comprehensive Email Security Check Route
+// Comprehensive Email Security Analysis Endpoint
 router.post('/analyze-email-security', async (req, res) => {
-  const { domain, dkimSelector = 'default', captchaText, captchaProbe } = req.body
+  try {
+    const { domain, dkimSelector = 'default' } = req.body
 
-  if (!domain) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Domain is required' 
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      })
+    }
+
+    // Clean and validate domain
+    const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+    
+    if (!cleanDomain || cleanDomain.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Please enter a valid domain name' 
+      })
+    }
+
+    const result = await analyzeEmailSecurity(cleanDomain, dkimSelector)
+    res.json(result)
+
+  } catch (error) {
+    console.error('Email security analysis error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze email security'
     })
   }
-
-  // Verify captcha with Bluefox.email format
-  const captchaValid = await verifyBluefoxCaptcha(captchaText, captchaProbe)
-  if (!captchaValid) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Invalid captcha. Please try again.' 
-    })
-  }
-
-  // Clean and validate domain
-  const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
-  
-  if (!cleanDomain || cleanDomain.length === 0) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Please enter a valid domain name' 
-    })
-  }
-
-  const result = await analyzeEmailSecurity(cleanDomain, dkimSelector)
-  return res.json(result)
 })
 
-// Legacy route for backward compatibility
+// Legacy DMARC endpoint for backward compatibility
 router.post('/analyze-dmarc-by-domain', async (req, res) => {
-  const { domain, captchaText, captchaProbe } = req.body
+  try {
+    const { domain } = req.body
 
-  if (!domain) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Domain is required' 
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      })
+    }
+
+    // Clean and validate domain
+    const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+    
+    if (!cleanDomain || cleanDomain.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Please enter a valid domain name' 
+      })
+    }
+
+    const result = await analyzeDMARC(cleanDomain)
+    res.json(result)
+
+  } catch (error) {
+    console.error('Legacy DMARC analysis error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze DMARC record'
     })
   }
-
-  // Verify captcha with Bluefox.email format
-  const captchaValid = await verifyBluefoxCaptcha(captchaText, captchaProbe)
-  if (!captchaValid) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Invalid captcha. Please try again.' 
-    })
-  }
-
-  // Clean and validate domain
-  const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
-  
-  if (!cleanDomain || cleanDomain.length === 0) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Please enter a valid domain name' 
-    })
-  }
-
-  const result = await analyzeDMARC(cleanDomain)
-  return res.json(result)
 })
 
 export default router

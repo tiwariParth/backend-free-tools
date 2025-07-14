@@ -4,7 +4,6 @@ import expressAsyncApi from 'express-async-api'
 
 // Import route modules
 import emailAuthRoutes from './src/routes/emailAuth.js'
-import captchaRoutes from './src/routes/captcha.js'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -31,7 +30,6 @@ app.get('/health', (req, res) => {
     company: 'Bluefox.email',
     endpoints: [
       'GET /health',
-      'GET /api/v1/captcha',
       'POST /api/analyze-dmarc',
       'POST /api/analyze-spf',
       'POST /api/analyze-dkim',
@@ -43,7 +41,6 @@ app.get('/health', (req, res) => {
 })
 
 // Mount route modules
-app.use('/api/v1', captchaRoutes)
 app.use('/api', emailAuthRoutes)
 
 app.listen(PORT, () => {
@@ -53,7 +50,6 @@ app.listen(PORT, () => {
   console.log(``)
   console.log(`📋 Available endpoints:`)
   console.log(`   GET  /health`)
-  console.log(`   GET  /api/v1/captcha`)
   console.log(`   POST /api/analyze-dmarc`)
   console.log(`   POST /api/analyze-spf`)
   console.log(`   POST /api/analyze-dkim`)
@@ -65,7 +61,7 @@ app.listen(PORT, () => {
   console.log(`   • DMARC, SPF, DKIM, and MX record analysis`)
   console.log(`   • Comprehensive email security scoring`)
   console.log(`   • Express Async API wrapper for better error handling`)
-  console.log(`   • Bluefox.email compatible captcha system`)
+  console.log(`   • No captcha required - direct API access`)
   console.log(`   • Rate limiting protection (10 req/min)`)
   console.log(`   • Enhanced CORS for frontend integration`)
   console.log(`   • Mailauth library integration for advanced analysis`)
