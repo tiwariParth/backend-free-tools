@@ -10,10 +10,10 @@ const { parse: dmarcParse } = dmarcParsePackage
 const app = express()
 const PORT = 3000
 
-// Use express-async-api for better error handling
-const api = expressAsyncApi(app)
-
 app.use(express.json())
+
+// Use express-async-api for better error handling
+expressAsyncApi(app)
 
 // CORS middleware (enhanced for frontend integration)
 app.use((_, res, next) => {
@@ -291,34 +291,30 @@ function enrichDMARC(result) {
 
 // Captcha endpoint (Bluefox.email compatible)
 app.get('/v1/captcha', async (req, res) => {
-  try {
-    const captchaText = generateCaptchaText()
-    const probe = crypto.randomUUID()
-    const svg = generateCaptchaSVG(captchaText)
-    
-    // Store captcha with expiration (5 minutes)
-    captchaStore.set(probe, {
-      text: captchaText.toLowerCase(),
-      expires: Date.now() + 5 * 60 * 1000 // 5 minutes
-    })
-    
-    // Clean up expired captchas
-    const now = Date.now()
-    for (const [key, value] of captchaStore.entries()) {
-      if (value.expires < now) {
-        captchaStore.delete(key)
-      }
+  const captchaText = generateCaptchaText()
+  const probe = crypto.randomUUID()
+  const svg = generateCaptchaSVG(captchaText)
+  
+  // Store captcha with expiration (5 minutes)
+  captchaStore.set(probe, {
+    text: captchaText.toLowerCase(),
+    expires: Date.now() + 5 * 60 * 1000 // 5 minutes
+  })
+  
+  // Clean up expired captchas
+  const now = Date.now()
+  for (const [key, value] of captchaStore.entries()) {
+    if (value.expires < now) {
+      captchaStore.delete(key)
     }
-    
-    res.json({
-      result: {
-        data: svg,
-        probe: probe
-      }
-    })
-  } catch (error) {
-    res.status(500).json({ error: error.message })
   }
+  
+  res.json({
+    result: {
+      data: svg,
+      probe: probe
+    }
+  })
 })
 
 // Rate limiting middleware
@@ -379,104 +375,84 @@ function verifyCaptcha(captchaText, captchaProbe) {
 
 // 1. GET /check-dmarc?domain=example.com
 app.get('/check-dmarc', async (req, res) => {
-  try {
-    const { domain } = req.query
-    if (!domain) return res.status(400).json({ error: 'Missing domain parameter' })
+  const { domain } = req.query
+  if (!domain) return res.status(400).json({ error: 'Missing domain parameter' })
 
-    const txtRecords = await resolver.resolveTxt(`_dmarc.${domain}`)
-    const flatRecords = txtRecords.map(entry => entry.join(''))
-    const dmarcRecord = flatRecords.find(txt => txt.startsWith('v=DMARC1'))
+  const txtRecords = await resolver.resolveTxt(`_dmarc.${domain}`)
+  const flatRecords = txtRecords.map(entry => entry.join(''))
+  const dmarcRecord = flatRecords.find(txt => txt.startsWith('v=DMARC1'))
 
-    if (!dmarcRecord) {
-      return res.json({ found: false, record: null, message: 'DMARC record not found' })
-    }
-
-    return res.json({ found: true, record: dmarcRecord })
-  } catch (error) {
-    return res.status(404).json({ found: false, error: error.message })
+  if (!dmarcRecord) {
+    return res.json({ found: false, record: null, message: 'DMARC record not found' })
   }
+
+  return res.json({ found: true, record: dmarcRecord })
 })
 
 // 2. POST /analyze-dmarc with { record: "v=DMARC1; p=..." }
 app.post('/analyze-dmarc', rateLimitMiddleware, async (req, res) => {
-  try {
-    const { record, captchaText, captchaProbe } = req.body
-    
-    if (!record) {
-      return res.status(400).json({ error: 'Missing DMARC record in request body' })
-    }
-
-    // Verify captcha if provided
-    if (captchaText && captchaProbe) {
-      const captchaResult = verifyCaptcha(captchaText, captchaProbe)
-      if (!captchaResult.valid) {
-        return res.status(400).json({ error: captchaResult.error })
-      }
-    }
-
-    if (!record.includes('v=DMARC1')) {
-      return res.status(400).json({ error: 'Invalid DMARC record: must contain v=DMARC1' })
-    }
-
-    const analysis = analyzeDMARC(record)
-    
-    return res.json({
-      success: true,
-      rawRecord: record,
-      ...analysis
-    })
-  } catch (error) {
-    return res.status(400).json({ 
-      success: false,
-      error: error.message
-    })
+  const { record, captchaText, captchaProbe } = req.body
+  
+  if (!record) {
+    return res.status(400).json({ error: 'Missing DMARC record in request body' })
   }
+
+  // Verify captcha if provided
+  if (captchaText && captchaProbe) {
+    const captchaResult = verifyCaptcha(captchaText, captchaProbe)
+    if (!captchaResult.valid) {
+      return res.status(400).json({ error: captchaResult.error })
+    }
+  }
+
+  if (!record.includes('v=DMARC1')) {
+    return res.status(400).json({ error: 'Invalid DMARC record: must contain v=DMARC1' })
+  }
+
+  const analysis = analyzeDMARC(record)
+  
+  return res.json({
+    success: true,
+    rawRecord: record,
+    ...analysis
+  })
 })
 
 // 3. GET /analyze-dmarc-by-domain?domain=example.com
 app.get('/analyze-dmarc-by-domain', rateLimitMiddleware, async (req, res) => {
-  try {
-    const { domain, captchaText, captchaProbe } = req.query
-    if (!domain) return res.status(400).json({ error: 'Missing domain parameter' })
+  const { domain, captchaText, captchaProbe } = req.query
+  if (!domain) return res.status(400).json({ error: 'Missing domain parameter' })
 
-    // Verify captcha if provided
-    if (captchaText && captchaProbe) {
-      const captchaResult = verifyCaptcha(captchaText, captchaProbe)
-      if (!captchaResult.valid) {
-        return res.status(400).json({ error: captchaResult.error })
-      }
+  // Verify captcha if provided
+  if (captchaText && captchaProbe) {
+    const captchaResult = verifyCaptcha(captchaText, captchaProbe)
+    if (!captchaResult.valid) {
+      return res.status(400).json({ error: captchaResult.error })
     }
+  }
 
-    const txtRecords = await resolver.resolveTxt(`_dmarc.${domain}`)
-    const flatRecords = txtRecords.map(entry => entry.join(''))
-    const dmarcRecord = flatRecords.find(txt => txt.startsWith('v=DMARC1'))
+  const txtRecords = await resolver.resolveTxt(`_dmarc.${domain}`)
+  const flatRecords = txtRecords.map(entry => entry.join(''))
+  const dmarcRecord = flatRecords.find(txt => txt.startsWith('v=DMARC1'))
 
-    if (!dmarcRecord) {
-      return res.status(404).json({ 
-        success: false,
-        error: 'DMARC record not found',
-        domain,
-        checkedRecord: `_dmarc.${domain}`
-      })
-    }
-
-    const analysis = analyzeDMARC(dmarcRecord)
-
-    return res.json({
-      success: true,
-      domain,
-      checkedRecord: `_dmarc.${domain}`,
-      rawRecord: dmarcRecord,
-      ...analysis
-    })
-  } catch (error) {
-    return res.status(500).json({ 
+  if (!dmarcRecord) {
+    return res.status(404).json({ 
       success: false,
-      error: error.message,
-      domain: req.query.domain,
-      checkedRecord: `_dmarc.${req.query.domain}`
+      error: 'DMARC record not found',
+      domain,
+      checkedRecord: `_dmarc.${domain}`
     })
   }
+
+  const analysis = analyzeDMARC(dmarcRecord)
+
+  return res.json({
+    success: true,
+    domain,
+    checkedRecord: `_dmarc.${domain}`,
+    rawRecord: dmarcRecord,
+    ...analysis
+  })
 })
 
 // Health check endpoint
@@ -500,41 +476,34 @@ app.get('/health', (req, res) => {
 
 // Enhanced endpoint with mandatory captcha verification
 app.post('/analyze-dmarc-with-captcha', rateLimitMiddleware, async (req, res) => {
-  try {
-    const { record, captchaText, captchaProbe } = req.body
-    
-    if (!record) {
-      return res.status(400).json({ error: 'Missing DMARC record in request body' })
-    }
-
-    if (!captchaText || !captchaProbe) {
-      return res.status(400).json({ error: 'Captcha verification required' })
-    }
-
-    // Verify captcha
-    const captchaResult = verifyCaptcha(captchaText, captchaProbe)
-    if (!captchaResult.valid) {
-      return res.status(400).json({ error: captchaResult.error })
-    }
-
-    if (!record.includes('v=DMARC1')) {
-      return res.status(400).json({ error: 'Invalid DMARC record: must contain v=DMARC1' })
-    }
-
-    const analysis = analyzeDMARC(record)
-    
-    return res.json({
-      success: true,
-      rawRecord: record,
-      captchaVerified: true,
-      ...analysis
-    })
-  } catch (error) {
-    return res.status(400).json({ 
-      success: false,
-      error: error.message
-    })
+  const { record, captchaText, captchaProbe } = req.body
+  
+  if (!record) {
+    return res.status(400).json({ error: 'Missing DMARC record in request body' })
   }
+
+  if (!captchaText || !captchaProbe) {
+    return res.status(400).json({ error: 'Captcha verification required' })
+  }
+
+  // Verify captcha
+  const captchaResult = verifyCaptcha(captchaText, captchaProbe)
+  if (!captchaResult.valid) {
+    return res.status(400).json({ error: captchaResult.error })
+  }
+
+  if (!record.includes('v=DMARC1')) {
+    return res.status(400).json({ error: 'Invalid DMARC record: must contain v=DMARC1' })
+  }
+
+  const analysis = analyzeDMARC(record)
+  
+  return res.json({
+    success: true,
+    rawRecord: record,
+    captchaVerified: true,
+    ...analysis
+  })
 })
 
 app.listen(PORT, () => {
