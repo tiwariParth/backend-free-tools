@@ -1,0 +1,27 @@
+{
+  "name": "backend-dmarc",
+  "version": "1.0.0",
+  "description": "DMARC checker and analyzer tool for Bluefox.email",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "dmarc",
+    "email",
+    "security",
+    "dns"
+  ],
+  "author": "Bluefox.email",
+  "license": "ISC",
+  "packageManager": "pnpm@10.13.1",
+  "dependencies": {
+    "dmarc-parse": "^1.2.1",
+    "express": "^5.1.0",
+    "express-async-api": "^0.8.1",
+    "nodemon": "^3.1.10"
+  }
+}
